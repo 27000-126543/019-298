@@ -1,31 +1,48 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, TrendingUp, Users, Activity, Calendar, ChevronDown } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Activity, Calendar, ChevronDown, X, Filter } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useVolumeData } from '@/hooks/useVolumeData';
 import { useShareData } from '@/hooks/useShareData';
+import { usePostContent } from '@/hooks/usePostContent';
 import { Header } from '@/components/layout/Header';
 import { KPICard } from '@/components/cards/KPICard';
 import { VolumeTrendChart } from '@/components/charts/VolumeTrendChart';
 import { SharePieChart } from '@/components/charts/SharePieChart';
 import { PlatformBarChart } from '@/components/charts/PlatformBarChart';
+import { PostCard } from '@/components/cards/PostCard';
 import { Button } from '@/components/ui/Button';
-import { TimeRange, PLATFORMS } from '@/types';
+import { Modal } from '@/components/ui/Modal';
+import { TimeRange } from '@/types';
 import { formatDateCN } from '@/utils/dateUtils';
 import { formatNumber, formatPercent } from '@/utils/numberUtils';
 import { cn } from '@/lib/utils';
 
 const DashboardPage = () => {
   const navigate = useNavigate();
-  const { config, timeRange, setTimeRange } = useAppStore();
-  const { brandData, currentData, previousData, getBrandTotalVolume, getBrandGrowthRate, getPlatformVolume } = useVolumeData();
-  const { shareData, brandRanking, currentRange } = useShareData();
+  const { config, timeRange, setTimeRange, selectedDate, setSelectedDate } = useAppStore();
+  const { brandData, currentData, previousData, getBrandTotalVolume, getBrandGrowthRate, getPlatformVolume, enabledPlatforms } = useVolumeData();
+  const { shareData, brandRanking, currentRange, enabledPlatformList } = useShareData();
+  const { posts, postsBySentiment, expandedPost, toggleExpand, getSentimentLabel } = usePostContent();
+  
+  const [showPostModal, setShowPostModal] = useState(false);
+  const [sentimentFilter, setSentimentFilter] = useState<'all' | 'positive' | 'negative' | 'neutral'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'ad' | 'organic'>('all');
   
   const timeRangeOptions: { value: TimeRange; label: string }[] = [
     { value: 'yesterday', label: '昨天' },
     { value: '7days', label: '近 7 天' },
     { value: 'custom', label: '活动周期' },
   ];
+  
+  const filteredPosts = useMemo(() => {
+    return posts.filter(post => {
+      if (sentimentFilter !== 'all' && post.sentiment !== sentimentFilter) return false;
+      if (typeFilter === 'ad' && !post.isAd) return false;
+      if (typeFilter === 'organic' && post.isAd) return false;
+      return true;
+    });
+  }, [posts, sentimentFilter, typeFilter]);
   
   const kpiData = useMemo(() => {
     if (!brandData || currentData.length === 0 || previousData.length === 0) return [];
@@ -79,7 +96,8 @@ const DashboardPage = () => {
   }, [brandData, currentData, previousData, getBrandTotalVolume, getBrandGrowthRate, brandRanking, config]);
   
   const handleChartPointClick = (date: string) => {
-    navigate('/details');
+    setSelectedDate(date);
+    setShowPostModal(true);
   };
   
   if (!config) {
@@ -158,6 +176,7 @@ const DashboardPage = () => {
                 showArea={true}
                 height={350}
                 onPointClick={handleChartPointClick}
+                enabledPlatforms={enabledPlatforms}
               />
             )}
           </div>
@@ -169,7 +188,7 @@ const DashboardPage = () => {
             
             {brandData && (
               <SharePieChart
-                data={PLATFORMS.map(p => ({
+                data={enabledPlatformList.map(p => ({
                   brandId: p.key,
                   brandName: p.name,
                   color: p.color,
@@ -222,7 +241,7 @@ const DashboardPage = () => {
                   <th className="text-right py-3 px-4 text-sm font-medium text-dark-500">总声量</th>
                   <th className="text-right py-3 px-4 text-sm font-medium text-dark-500">份额</th>
                   <th className="text-right py-3 px-4 text-sm font-medium text-dark-500">环比</th>
-                  {PLATFORMS.map(p => (
+                  {enabledPlatformList.map(p => (
                     <th key={p.key} className="text-right py-3 px-4 text-sm font-medium text-dark-500">
                       {p.name}
                     </th>
@@ -298,7 +317,7 @@ const DashboardPage = () => {
                           {brand.growth > 0.05 ? '+' : ''}{formatPercent(brand.growth)}
                         </span>
                       </td>
-                      {PLATFORMS.map(p => {
+                      {enabledPlatformList.map(p => {
                         const breakdown = brand.platformBreakdown.find(b => b.platform === p.key);
                         return (
                           <td key={p.key} className="text-right py-4 px-4 font-mono text-sm text-dark-700">
@@ -314,6 +333,111 @@ const DashboardPage = () => {
           </div>
         </div>
       </main>
+      
+      <Modal
+        isOpen={showPostModal}
+        onClose={() => setShowPostModal(false)}
+        title={
+          selectedDate
+            ? `${selectedDate} 热点内容`
+            : '热点内容下钻'
+        }
+        size="lg"
+      >
+        <div className="space-y-4">
+          {selectedDate ? (
+            <>
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-dark-500" />
+                  <span className="text-sm text-dark-600">筛选:</span>
+                  
+                  <div className="flex gap-2">
+                    {(['all', 'positive', 'negative', 'neutral'] as const).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setSentimentFilter(s)}
+                        className={cn(
+                          'px-3 py-1 text-xs font-medium rounded-full transition-all',
+                          sentimentFilter === s
+                            ? s === 'positive' ? 'bg-success-500 text-white' :
+                              s === 'negative' ? 'bg-danger-500 text-white' :
+                              s === 'neutral' ? 'bg-dark-500 text-white' :
+                              'bg-brand-500 text-white'
+                            : 'bg-dark-100 text-dark-600 hover:bg-dark-200'
+                        )}
+                      >
+                        {s === 'all' ? '全部' : getSentimentLabel(s).text}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    {(['all', 'ad', 'organic'] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setTypeFilter(t)}
+                        className={cn(
+                          'px-3 py-1 text-xs font-medium rounded-full transition-all',
+                          typeFilter === t
+                            ? 'bg-warning-500 text-white'
+                            : 'bg-dark-100 text-dark-600 hover:bg-dark-200'
+                        )}
+                      >
+                        {t === 'all' ? '全部类型' : t === 'ad' ? '推广' : '自然'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-4 text-sm text-dark-500">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-success-500" />
+                    正面 {postsBySentiment.positive.length}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-danger-500" />
+                    负面 {postsBySentiment.negative.length}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-dark-400" />
+                    中性 {postsBySentiment.neutral.length}
+                  </span>
+                </div>
+              </div>
+              
+              {filteredPosts.length > 0 ? (
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+                  {filteredPosts.map((post) => (
+                    <PostCard
+                      key={post.id}
+                      post={post}
+                      isExpanded={expandedPost === post.id}
+                      onToggle={() => toggleExpand(post.id)}
+                      getSentimentLabel={getSentimentLabel}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-dark-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <X className="w-8 h-8 text-dark-400" />
+                  </div>
+                  <p className="text-dark-500">暂无符合筛选条件的内容</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <BarChart3 className="w-8 h-8 text-brand-500" />
+              </div>
+              <p className="text-dark-700 font-medium mb-1">点击走势图中的数据点</p>
+              <p className="text-dark-500 text-sm">查看当天拉动声量的具体内容</p>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };

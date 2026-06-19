@@ -1,12 +1,18 @@
 import { ShareData, PlatformGrowth, VolumeDataPoint, BrandVolumeData } from '@/types';
 import { calculateTotalVolume } from './volumeGenerator';
 
+const calculateVolumeByPlatforms = (data: VolumeDataPoint[], platformKeys: string[]): number => {
+  return data.reduce((sum, d) => {
+    return sum + platformKeys.reduce((s, key) => s + (d[key as keyof VolumeDataPoint] as number), 0);
+  }, 0);
+};
+
 export const generateShareData = (
   brandVolumes: BrandVolumeData[],
   platformKeys: string[]
 ): ShareData[] => {
   const totalAll = brandVolumes.reduce((sum, bv) => {
-    return sum + calculateTotalVolume(bv.data);
+    return sum + calculateVolumeByPlatforms(bv.data, platformKeys);
   }, 0);
   
   const platformTotals: Record<string, number> = {};
@@ -17,7 +23,7 @@ export const generateShareData = (
   });
   
   return brandVolumes.map(bv => {
-    const brandTotal = calculateTotalVolume(bv.data);
+    const brandTotal = calculateVolumeByPlatforms(bv.data, platformKeys);
     const share = totalAll > 0 ? brandTotal / totalAll : 0;
     const growth = 0.05 + Math.random() * 0.2 - 0.1;
     

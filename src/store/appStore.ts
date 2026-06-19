@@ -70,21 +70,38 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
 
   addCompetitor: (competitor) => set((state) => {
-    if (!state.config) return state;
-    if (state.config.competitors.length >= 3) return state;
+    let currentConfig = state.config;
+    
+    if (!currentConfig) {
+      currentConfig = {
+        brand: {
+          id: generateId(),
+          name: '',
+          aliases: [],
+          productLines: [],
+          color: '#3B82F6',
+        },
+        competitors: [],
+        dataSources: DEFAULT_DATA_SOURCES,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+    }
+    
+    if (currentConfig.competitors.length >= 3) return state;
     
     const colors = ['#8B5CF6', '#F97316', '#06B6D4'];
     const newCompetitor: CompetitorConfig = {
       id: generateId(),
       name: competitor.name,
       aliases: competitor.aliases || [],
-      color: colors[state.config.competitors.length] || '#8B5CF6',
+      color: colors[currentConfig.competitors.length] || '#8B5CF6',
     };
     
     return {
       config: {
-        ...state.config,
-        competitors: [...state.config.competitors, newCompetitor],
+        ...currentConfig,
+        competitors: [...currentConfig.competitors, newCompetitor],
         updatedAt: Date.now(),
       },
     };

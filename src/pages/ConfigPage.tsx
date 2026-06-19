@@ -78,13 +78,15 @@ const ConfigPage = () => {
     setCompetitorAliases(competitorAliases.filter(a => a !== alias));
   };
   
+  const competitorCount = config?.competitors.length || 0;
+  
   const handleAddCompetitor = () => {
     if (!newCompetitorName.trim()) {
       setErrors(prev => ({ ...prev, competitor: '请输入竞品品牌名称' }));
       return;
     }
     
-    if (config && config.competitors.length >= 3) {
+    if (competitorCount >= 3) {
       setErrors(prev => ({ ...prev, competitor: '最多只能添加 3 个竞品' }));
       return;
     }
@@ -261,7 +263,7 @@ const ConfigPage = () => {
               </span>
             </h2>
             
-            {config && config.competitors.length > 0 && (
+            {competitorCount > 0 && config && (
               <div className="space-y-3 mb-6">
                 {config.competitors.map((competitor, index) => (
                   <div
@@ -295,7 +297,7 @@ const ConfigPage = () => {
               </div>
             )}
             
-            {config && config.competitors.length < 3 && (
+            {competitorCount < 3 && (
               <div className="space-y-4 p-4 border-2 border-dashed border-dark-200 rounded-xl">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
@@ -345,7 +347,7 @@ const ConfigPage = () => {
               </div>
             )}
             
-            {config && config.competitors.length >= 3 && (
+            {competitorCount >= 3 && (
               <div className="p-4 bg-warning-50 border border-warning-200 rounded-xl text-sm text-warning-700">
                 已达到最大竞品数量限制（3 个）。如需修改，请先删除现有竞品。
               </div>

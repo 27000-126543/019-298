@@ -21,17 +21,32 @@ interface VolumeTrendChartProps {
   showArea?: boolean;
   height?: number;
   onPointClick?: (date: string) => void;
+  enabledPlatforms?: string[];
 }
 
-export const VolumeTrendChart = ({ data, showArea = true, height = 350, onPointClick }: VolumeTrendChartProps) => {
+export const VolumeTrendChart = ({ data, showArea = true, height = 350, onPointClick, enabledPlatforms }: VolumeTrendChartProps) => {
   const { selectedDate, setSelectedDate } = useAppStore();
   
+  const platforms = useMemo(() => {
+    if (enabledPlatforms && enabledPlatforms.length > 0) {
+      return PLATFORMS.filter(p => enabledPlatforms.includes(p.key));
+    }
+    return PLATFORMS;
+  }, [enabledPlatforms]);
+  
   const chartData = useMemo(() => {
-    return data.data.map(d => ({
-      ...d,
-      dateCN: formatDateCN(new Date(d.date)),
-    }));
-  }, [data]);
+    return data.data.map(d => {
+      const platformKeys = platforms.map(p => p.key);
+      const filteredTotal = platformKeys.reduce((sum, key) => {
+        return sum + (d[key as keyof typeof d] as number);
+      }, 0);
+      return {
+        ...d,
+        filteredTotal,
+        dateCN: formatDateCN(new Date(d.date)),
+      };
+    });
+  }, [data, platforms]);
   
   const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) => {
     if (!active || !payload || !payload.length) return null;
@@ -69,13 +84,20 @@ export const VolumeTrendChart = ({ data, showArea = true, height = 350, onPointC
     }
   };
   
-  const lines = [
-    { key: 'total', name: '总声量', color: data.color, strokeWidth: 3 },
-    { key: 'weibo', name: '微博', color: '#E6162D', strokeWidth: 1.5 },
-    { key: 'shortVideo', name: '短视频', color: '#000000', strokeWidth: 1.5 },
-    { key: 'news', name: '新闻', color: '#1E40AF', strokeWidth: 1.5 },
-    { key: 'forum', name: '论坛', color: '#7C3AED', strokeWidth: 1.5 },
-  ];
+  const lines = useMemo(() => {
+    const result = [
+      { key: 'filteredTotal', name: '总声量', color: data.color, strokeWidth: 3 },
+    ];
+    platforms.forEach(p => {
+      result.push({
+        key: p.key,
+        name: p.name,
+        color: p.color,
+        strokeWidth: 1.5,
+      });
+    });
+    return result;
+  }, [data.color, platforms]);
   
   return (
     <div className="w-full">

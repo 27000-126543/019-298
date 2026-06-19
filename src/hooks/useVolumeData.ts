@@ -2,10 +2,15 @@ import { useMemo } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { generateAllBrandVolumes, getVolumeDataByRange, calculateTotalVolume, calculateGrowthRate } from '@/services/mockData/volumeGenerator';
 import { getDateRange } from '@/utils/dateUtils';
-import { BrandVolumeData } from '@/types';
+import { BrandVolumeData, PLATFORMS } from '@/types';
 
 export const useVolumeData = () => {
   const { config, timeRange, customDateRange } = useAppStore();
+  
+  const enabledPlatforms = useMemo(() => {
+    if (!config) return PLATFORMS.map(p => p.key);
+    return PLATFORMS.filter(p => config.dataSources[p.key as keyof typeof config.dataSources]).map(p => p.key);
+  }, [config]);
   
   const allData = useMemo(() => {
     if (!config) return [];
@@ -49,11 +54,16 @@ export const useVolumeData = () => {
   }, [currentData]);
   
   const getBrandTotalVolume = (brandData: BrandVolumeData) => {
-    return calculateTotalVolume(brandData.data);
+    return brandData.data.reduce((sum, d) => {
+      return sum + enabledPlatforms.reduce((s, key) => s + (d[key as keyof typeof d] as number), 0);
+    }, 0);
   };
   
   const getBrandGrowthRate = (current: BrandVolumeData, previous: BrandVolumeData) => {
-    return calculateGrowthRate(current.data, previous.data);
+    const currentTotal = getBrandTotalVolume(current);
+    const previousTotal = getBrandTotalVolume(previous);
+    if (previousTotal === 0) return 0;
+    return (currentTotal - previousTotal) / previousTotal;
   };
   
   const getPlatformVolume = (brandData: BrandVolumeData, platform: string) => {
@@ -73,5 +83,6 @@ export const useVolumeData = () => {
     getBrandTotalVolume,
     getBrandGrowthRate,
     getPlatformVolume,
+    enabledPlatforms,
   };
 };

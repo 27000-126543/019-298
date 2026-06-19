@@ -21,9 +21,15 @@ import { cn } from '@/lib/utils';
 const DetailsPage = () => {
   const navigate = useNavigate();
   const { config, timeRange, setTimeRange, customDateRange, setCustomDateRange, selectedDate, setSelectedDate } = useAppStore();
-  const { brandData, currentRange } = useVolumeData();
-  const { shareData, topGrowthPlatforms, decliningPlatforms, platformGrowth } = useShareData();
+  const { brandData, currentRange, enabledPlatforms } = useVolumeData();
+  const { shareData, topGrowthPlatforms, decliningPlatforms, platformGrowth, enabledPlatformList } = useShareData();
   const { posts, postsBySentiment, expandedPost, toggleExpand, getSentimentLabel } = usePostContent();
+  
+  const isValidCustomRange = timeRange !== 'custom' || (
+    customDateRange?.start && 
+    customDateRange?.end && 
+    customDateRange.start <= customDateRange.end
+  );
   
   const [showPostModal, setShowPostModal] = useState(false);
   const [sentimentFilter, setSentimentFilter] = useState<'all' | 'positive' | 'negative' | 'neutral'>('all');
@@ -135,11 +141,17 @@ const DetailsPage = () => {
                 </p>
               </div>
             </div>
-            <SharePieChart
-              data={shareData}
-              height={350}
-              showCenterLabel={true}
-            />
+            {isValidCustomRange ? (
+              <SharePieChart
+                data={shareData}
+                height={350}
+                showCenterLabel={true}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-[350px] text-dark-500">
+                请选择有效的活动周期日期范围
+              </div>
+            )}
           </div>
           
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-dark-100 animate-fade-in" style={{ animationDelay: '100ms' }}>
@@ -150,60 +162,66 @@ const DetailsPage = () => {
               <h3 className="text-lg font-semibold text-dark-900">各品牌数据</h3>
             </div>
             
-            <div className="space-y-3">
-              {shareData.map((brand, index) => {
-                const isMyBrand = brand.brandId === config.brand.id;
-                return (
-                  <div
-                    key={brand.brandId}
-                    className={cn(
-                      'p-4 rounded-xl transition-all',
-                      isMyBrand ? 'bg-brand-50 border border-brand-200' : 'bg-dark-50'
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: brand.color }}
-                        />
-                        <span className={cn(
-                          'font-medium',
-                          isMyBrand ? 'text-brand-700' : 'text-dark-900'
-                        )}>
-                          {brand.brandName}
+            {isValidCustomRange ? (
+              <div className="space-y-3">
+                {shareData.map((brand, index) => {
+                  const isMyBrand = brand.brandId === config.brand.id;
+                  return (
+                    <div
+                      key={brand.brandId}
+                      className={cn(
+                        'p-4 rounded-xl transition-all',
+                        isMyBrand ? 'bg-brand-50 border border-brand-200' : 'bg-dark-50'
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: brand.color }}
+                          />
+                          <span className={cn(
+                            'font-medium',
+                            isMyBrand ? 'text-brand-700' : 'text-dark-900'
+                          )}>
+                            {brand.brandName}
+                          </span>
+                        </div>
+                        <span className="font-mono font-bold text-dark-900">
+                          {formatPercent(brand.share)}
                         </span>
                       </div>
-                      <span className="font-mono font-bold text-dark-900">
-                        {formatPercent(brand.share)}
-                      </span>
+                      <div className="w-full h-2 bg-dark-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${brand.share * 100}%`,
+                            backgroundColor: brand.color,
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between mt-2 text-xs">
+                        <span className="text-dark-500">
+                          声量: {formatNumber(brand.totalVolume)}
+                        </span>
+                        <span className={cn(
+                          'font-medium',
+                          brand.growth > 0.05 ? 'text-success-600' :
+                          brand.growth < -0.05 ? 'text-danger-600' :
+                          'text-dark-500'
+                        )}>
+                          {brand.growth > 0.05 ? '+' : ''}{formatPercent(brand.growth)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="w-full h-2 bg-dark-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${brand.share * 100}%`,
-                          backgroundColor: brand.color,
-                        }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between mt-2 text-xs">
-                      <span className="text-dark-500">
-                        声量: {formatNumber(brand.totalVolume)}
-                      </span>
-                      <span className={cn(
-                        'font-medium',
-                        brand.growth > 0.05 ? 'text-success-600' :
-                        brand.growth < -0.05 ? 'text-danger-600' :
-                        'text-dark-500'
-                      )}>
-                        {brand.growth > 0.05 ? '+' : ''}{formatPercent(brand.growth)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-[200px] text-dark-500">
+                请选择有效的活动周期日期范围
+              </div>
+            )}
           </div>
         </div>
         
@@ -216,7 +234,11 @@ const DetailsPage = () => {
               <h3 className="text-lg font-semibold text-dark-900">增长最快平台</h3>
             </div>
             
-            {topGrowthPlatforms.length > 0 ? (
+            {!isValidCustomRange ? (
+              <div className="text-center py-8 text-dark-500">
+                请选择有效的活动周期日期范围
+              </div>
+            ) : topGrowthPlatforms.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {topGrowthPlatforms.map((platform, index) => (
                   <PlatformGrowthCard
@@ -242,7 +264,11 @@ const DetailsPage = () => {
               <h3 className="text-lg font-semibold text-dark-900">下滑渠道预警</h3>
             </div>
             
-            {decliningPlatforms.length > 0 ? (
+            {!isValidCustomRange ? (
+              <div className="text-center py-8 text-dark-500">
+                请选择有效的活动周期日期范围
+              </div>
+            ) : decliningPlatforms.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {decliningPlatforms.map((platform, index) => (
                   <PlatformGrowthCard
@@ -284,49 +310,63 @@ const DetailsPage = () => {
               )}
             </div>
             
-            {brandData && (
+            {brandData && isValidCustomRange ? (
               <VolumeTrendChart
                 data={brandData}
                 showArea={true}
                 height={300}
                 onPointClick={handleChartPointClick}
+                enabledPlatforms={enabledPlatforms}
               />
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-dark-500">
+                {timeRange === 'custom' && !isValidCustomRange 
+                  ? '请选择有效的活动周期日期范围'
+                  : '暂无数据'
+                }
+              </div>
             )}
           </div>
           
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-dark-100 animate-fade-in" style={{ animationDelay: '500ms' }}>
             <h3 className="text-lg font-semibold text-dark-900 mb-4">平台增长明细</h3>
             
-            <div className="space-y-3">
-              {platformGrowth.map((pg) => {
-                const platform = PLATFORMS.find(p => p.key === pg.platform);
-                return (
-                  <div key={pg.platform} className="p-3 bg-dark-50 rounded-xl">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: platform?.color }}
-                        />
-                        <span className="font-medium text-dark-900">{pg.platformName}</span>
+            {!isValidCustomRange ? (
+              <div className="text-center py-8 text-dark-500">
+                请选择有效的活动周期日期范围
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {platformGrowth.map((pg) => {
+                  const platform = enabledPlatformList.find(p => p.key === pg.platform);
+                  return (
+                    <div key={pg.platform} className="p-3 bg-dark-50 rounded-xl">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: platform?.color }}
+                          />
+                          <span className="font-medium text-dark-900">{pg.platformName}</span>
+                        </div>
+                        <span className={cn(
+                          'font-mono font-bold',
+                          pg.trend === 'up' ? 'text-success-600' :
+                          pg.trend === 'down' ? 'text-danger-600' :
+                          'text-dark-500'
+                        )}>
+                          {pg.growthRate > 0 ? '+' : ''}{formatPercent(pg.growthRate)}
+                        </span>
                       </div>
-                      <span className={cn(
-                        'font-mono font-bold',
-                        pg.trend === 'up' ? 'text-success-600' :
-                        pg.trend === 'down' ? 'text-danger-600' :
-                        'text-dark-500'
-                      )}>
-                        {pg.growthRate > 0 ? '+' : ''}{formatPercent(pg.growthRate)}
-                      </span>
+                      <div className="flex items-center justify-between text-xs text-dark-500">
+                        <span>当前: {formatNumber(pg.currentVolume)}</span>
+                        <span>上期: {formatNumber(pg.previousVolume)}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-dark-500">
-                      <span>当前: {formatNumber(pg.currentVolume)}</span>
-                      <span>上期: {formatNumber(pg.previousVolume)}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </main>

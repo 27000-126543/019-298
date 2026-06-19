@@ -1,22 +1,25 @@
 import { useMemo } from 'react';
 import { useVolumeData } from './useVolumeData';
 import { generateShareData, generatePlatformGrowth, getTopGrowthPlatforms, getDecliningPlatforms } from '@/services/mockData/shareGenerator';
-import { PLATFORMS } from '@/types';
+import { PLATFORMS, Platform } from '@/types';
+import { useAppStore } from '@/store/appStore';
 
 export const useShareData = () => {
-  const { currentData, previousData, currentRange } = useVolumeData();
+  const { currentData, previousData, currentRange, enabledPlatforms } = useVolumeData();
+  const { config } = useAppStore();
   
-  const enabledPlatforms = useMemo(() => {
-    return PLATFORMS.map(p => p.key);
-  }, []);
+  const enabledPlatformList = useMemo(() => {
+    if (!config) return PLATFORMS;
+    return PLATFORMS.filter(p => config.dataSources[p.key as keyof typeof config.dataSources]);
+  }, [config]);
   
   const shareData = useMemo(() => {
     return generateShareData(currentData, enabledPlatforms);
   }, [currentData, enabledPlatforms]);
   
   const platformGrowth = useMemo(() => {
-    return generatePlatformGrowth(currentData, previousData, PLATFORMS);
-  }, [currentData, previousData]);
+    return generatePlatformGrowth(currentData, previousData, enabledPlatformList);
+  }, [currentData, previousData, enabledPlatformList]);
   
   const topGrowthPlatforms = useMemo(() => {
     return getTopGrowthPlatforms(platformGrowth, 3);
@@ -45,5 +48,7 @@ export const useShareData = () => {
     sortedBrandsByShare,
     brandRanking,
     currentRange,
+    enabledPlatforms,
+    enabledPlatformList,
   };
 };

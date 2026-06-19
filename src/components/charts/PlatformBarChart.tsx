@@ -19,7 +19,14 @@ interface PlatformBarChartProps {
 
 export const PlatformBarChart = ({ data, height = 300 }: PlatformBarChartProps) => {
   const chartData = useMemo(() => {
-    const platforms = PLATFORMS.map(p => p.key);
+    const platforms: string[] = [];
+    data.forEach(brand => {
+      brand.platformBreakdown.forEach(b => {
+        if (!platforms.includes(b.platform)) {
+          platforms.push(b.platform);
+        }
+      });
+    });
     
     return platforms.map(platform => {
       const platformData: Record<string, unknown> = { platform };
