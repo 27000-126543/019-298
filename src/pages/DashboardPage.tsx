@@ -1,19 +1,21 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, TrendingUp, Users, Activity, Calendar, ChevronDown, X, Filter } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Activity, Calendar, ChevronDown, X, Filter, ArrowUpDown, RotateCcw, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useVolumeData } from '@/hooks/useVolumeData';
 import { useShareData } from '@/hooks/useShareData';
 import { usePostContent } from '@/hooks/usePostContent';
+import { useAbnormalSpikes } from '@/hooks/useAbnormalSpikes';
 import { Header } from '@/components/layout/Header';
 import { KPICard } from '@/components/cards/KPICard';
 import { VolumeTrendChart } from '@/components/charts/VolumeTrendChart';
 import { SharePieChart } from '@/components/charts/SharePieChart';
 import { PlatformBarChart } from '@/components/charts/PlatformBarChart';
 import { PostCard } from '@/components/cards/PostCard';
+import { AbnormalSpikeCard } from '@/components/cards/AbnormalSpikeCard';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { TimeRange } from '@/types';
+import { TimeRange, PLATFORMS, SortField, SortOrder } from '@/types';
 import { formatDateCN } from '@/utils/dateUtils';
 import { formatNumber, formatPercent } from '@/utils/numberUtils';
 import { cn } from '@/lib/utils';
@@ -23,26 +25,33 @@ const DashboardPage = () => {
   const { config, timeRange, setTimeRange, selectedDate, setSelectedDate } = useAppStore();
   const { brandData, currentData, previousData, getBrandTotalVolume, getBrandGrowthRate, getPlatformVolume, enabledPlatforms } = useVolumeData();
   const { shareData, brandRanking, currentRange, enabledPlatformList } = useShareData();
-  const { posts, postsBySentiment, expandedPost, toggleExpand, getSentimentLabel } = usePostContent();
+  const { 
+    filteredPosts, 
+    postsBySentiment, 
+    getSentimentLabel,
+    platformFilter,
+    setPlatformFilter,
+    sentimentFilter,
+    setSentimentFilter,
+    typeFilter,
+    setTypeFilter,
+    sortField,
+    setSortField,
+    sortOrder,
+    setSortOrder,
+    toggleSortOrder,
+    resetFilters,
+    enabledPlatforms: postEnabledPlatforms,
+  } = usePostContent();
+  const { competitorSpikes } = useAbnormalSpikes();
   
   const [showPostModal, setShowPostModal] = useState(false);
-  const [sentimentFilter, setSentimentFilter] = useState<'all' | 'positive' | 'negative' | 'neutral'>('all');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'ad' | 'organic'>('all');
   
   const timeRangeOptions: { value: TimeRange; label: string }[] = [
     { value: 'yesterday', label: '昨天' },
     { value: '7days', label: '近 7 天' },
     { value: 'custom', label: '活动周期' },
   ];
-  
-  const filteredPosts = useMemo(() => {
-    return posts.filter(post => {
-      if (sentimentFilter !== 'all' && post.sentiment !== sentimentFilter) return false;
-      if (typeFilter === 'ad' && !post.isAd) return false;
-      if (typeFilter === 'organic' && post.isAd) return false;
-      return true;
-    });
-  }, [posts, sentimentFilter, typeFilter]);
   
   const kpiData = useMemo(() => {
     if (!brandData || currentData.length === 0 || previousData.length === 0) return [];
@@ -227,7 +236,34 @@ const DashboardPage = () => {
           </div>
         </div>
         
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-dark-100 animate-fade-in" style={{ animationDelay: '400ms' }}>
+        {competitorSpikes.length > 0 && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-dark-100 animate-fade-in" style={{ animationDelay: '400ms' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 bg-danger-50 rounded-lg flex items-center justify-center">
+                <AlertTriangle className="w-4 h-4 text-danger-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-dark-900">竞品异常波动提醒</h3>
+                <p className="text-sm text-dark-500 mt-0.5">
+                  检测到 {competitorSpikes.length} 个竞品异常增长事件，点击查看日期和代表内容
+                </p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {competitorSpikes.slice(0, 6).map((spike, index) => (
+                <AbnormalSpikeCard
+                  key={spike.id}
+                  spike={spike}
+                  getSentimentLabel={getSentimentLabel}
+                  delay={index * 100}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+        
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-dark-100 animate-fade-in" style={{ animationDelay: '450ms' }}>
           <h3 className="text-lg font-semibold text-dark-900 mb-4">
             品牌竞品对比
           </h3>
@@ -342,78 +378,173 @@ const DashboardPage = () => {
             ? `${selectedDate} 热点内容`
             : '热点内容下钻'
         }
-        size="lg"
+        size="xl"
       >
         <div className="space-y-4">
           {selectedDate ? (
             <>
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-dark-500" />
-                  <span className="text-sm text-dark-600">筛选:</span>
-                  
-                  <div className="flex gap-2">
-                    {(['all', 'positive', 'negative', 'neutral'] as const).map((s) => (
+              <div className="p-4 bg-dark-50 rounded-xl space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-dark-500" />
+                    <span className="text-sm font-medium text-dark-700">平台筛选</span>
+                    <div className="flex gap-2 flex-wrap">
                       <button
-                        key={s}
-                        onClick={() => setSentimentFilter(s)}
+                        onClick={() => setPlatformFilter('all')}
                         className={cn(
                           'px-3 py-1 text-xs font-medium rounded-full transition-all',
-                          sentimentFilter === s
-                            ? s === 'positive' ? 'bg-success-500 text-white' :
-                              s === 'negative' ? 'bg-danger-500 text-white' :
-                              s === 'neutral' ? 'bg-dark-500 text-white' :
-                              'bg-brand-500 text-white'
-                            : 'bg-dark-100 text-dark-600 hover:bg-dark-200'
+                          platformFilter === 'all'
+                            ? 'bg-brand-500 text-white'
+                            : 'bg-white text-dark-600 hover:bg-dark-100 border border-dark-200'
                         )}
                       >
-                        {s === 'all' ? '全部' : getSentimentLabel(s).text}
+                        全部
                       </button>
-                    ))}
+                      {postEnabledPlatforms.map((platformKey) => {
+                        const platform = PLATFORMS.find(p => p.key === platformKey);
+                        if (!platform) return null;
+                        return (
+                          <button
+                            key={platformKey}
+                            onClick={() => setPlatformFilter(platformKey)}
+                            className={cn(
+                              'px-3 py-1 text-xs font-medium rounded-full transition-all',
+                              platformFilter === platformKey
+                                ? 'text-white'
+                                : 'bg-white text-dark-600 hover:bg-dark-100 border border-dark-200'
+                            )}
+                            style={platformFilter === platformKey ? { backgroundColor: platform.color } : {}}
+                          >
+                            {platform.name}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                   
-                  <div className="flex gap-2">
-                    {(['all', 'ad', 'organic'] as const).map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => setTypeFilter(t)}
-                        className={cn(
-                          'px-3 py-1 text-xs font-medium rounded-full transition-all',
-                          typeFilter === t
-                            ? 'bg-warning-500 text-white'
-                            : 'bg-dark-100 text-dark-600 hover:bg-dark-200'
-                        )}
-                      >
-                        {t === 'all' ? '全部类型' : t === 'ad' ? '推广' : '自然'}
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-4 text-sm">
+                    <span className="flex items-center gap-1 text-success-600">
+                      <span className="w-2 h-2 rounded-full bg-success-500" />
+                      正面 {postsBySentiment.positive.length}
+                    </span>
+                    <span className="flex items-center gap-1 text-danger-600">
+                      <span className="w-2 h-2 rounded-full bg-danger-500" />
+                      负面 {postsBySentiment.negative.length}
+                    </span>
+                    <span className="flex items-center gap-1 text-dark-500">
+                      <span className="w-2 h-2 rounded-full bg-dark-400" />
+                      中性 {postsBySentiment.neutral.length}
+                    </span>
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-4 text-sm text-dark-500">
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-success-500" />
-                    正面 {postsBySentiment.positive.length}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-danger-500" />
-                    负面 {postsBySentiment.negative.length}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-dark-400" />
-                    中性 {postsBySentiment.neutral.length}
-                  </span>
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-dark-700">情绪</span>
+                    <div className="flex gap-2">
+                      {(['all', 'positive', 'negative', 'neutral'] as const).map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => setSentimentFilter(s)}
+                          className={cn(
+                            'px-3 py-1 text-xs font-medium rounded-full transition-all',
+                            sentimentFilter === s
+                              ? s === 'positive' ? 'bg-success-500 text-white' :
+                                s === 'negative' ? 'bg-danger-500 text-white' :
+                                s === 'neutral' ? 'bg-dark-500 text-white' :
+                                'bg-brand-500 text-white'
+                              : 'bg-white text-dark-600 hover:bg-dark-100 border border-dark-200'
+                          )}
+                        >
+                          {s === 'all' ? '全部' : getSentimentLabel(s).text}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-dark-700">类型</span>
+                    <div className="flex gap-2">
+                      {(['all', 'ad', 'organic'] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setTypeFilter(t)}
+                          className={cn(
+                            'px-3 py-1 text-xs font-medium rounded-full transition-all',
+                            typeFilter === t
+                              ? 'bg-warning-500 text-white'
+                              : 'bg-white text-dark-600 hover:bg-dark-100 border border-dark-200'
+                          )}
+                        >
+                          {t === 'all' ? '全部类型' : t === 'ad' ? '推广' : '自然'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={resetFilters}
+                    className="flex items-center gap-1 px-3 py-1 text-xs text-dark-500 hover:text-dark-700 transition-colors"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    重置筛选
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <ArrowUpDown className="w-4 h-4 text-dark-500" />
+                  <span className="text-sm font-medium text-dark-700">排序</span>
+                  <div className="flex gap-2">
+                    {(['engagement', 'date', 'likes', 'comments', 'shares'] as SortField[]).map((field) => {
+                      const labels: Record<SortField, string> = {
+                        engagement: '总互动',
+                        date: '发布时间',
+                        likes: '点赞',
+                        comments: '评论',
+                        shares: '转发',
+                      };
+                      return (
+                        <button
+                          key={field}
+                          onClick={() => {
+                            if (sortField === field) {
+                              toggleSortOrder();
+                            } else {
+                              setSortField(field);
+                              setSortOrder('desc');
+                            }
+                          }}
+                          className={cn(
+                            'flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-full transition-all',
+                            sortField === field
+                              ? 'bg-dark-700 text-white'
+                              : 'bg-white text-dark-600 hover:bg-dark-100 border border-dark-200'
+                          )}
+                        >
+                          {labels[field]}
+                          {sortField === field && (
+                            <span className="text-[10px]">
+                              {sortOrder === 'desc' ? '↓' : '↑'}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
               
+              <div className="text-sm text-dark-500">
+                共 {filteredPosts.length} 条内容
+              </div>
+              
               {filteredPosts.length > 0 ? (
-                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+                <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-2">
                   {filteredPosts.map((post) => (
                     <PostCard
                       key={post.id}
                       post={post}
-                      isExpanded={expandedPost === post.id}
-                      onToggle={() => toggleExpand(post.id)}
+                      showContent={true}
                       getSentimentLabel={getSentimentLabel}
                     />
                   ))}

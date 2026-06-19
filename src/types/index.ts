@@ -108,6 +108,24 @@ export const PLATFORMS: Platform[] = [
   { key: 'forum', name: '论坛', icon: 'Users', color: '#7C3AED' },
 ];
 
+export interface AbnormalSpike {
+  id: string;
+  brandId: string;
+  brandName: string;
+  brandColor: string;
+  platform: string;
+  platformName: string;
+  date: string;
+  volume: number;
+  previousVolume: number;
+  growthRate: number;
+  severity: 'high' | 'medium' | 'low';
+  representativePosts: PostContent[];
+}
+
+export type SortField = 'engagement' | 'date' | 'likes' | 'comments' | 'shares';
+export type SortOrder = 'desc' | 'asc';
+
 export const COMPETITOR_COLORS = [
   '#8B5CF6',
   '#F97316',
