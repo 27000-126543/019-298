@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { AppConfig, BrandConfig, CompetitorConfig, DataSourceConfig, TimeRange, DateRange } from '@/types';
+import { AppConfig, BrandConfig, CompetitorConfig, DataSourceConfig, TimeRange, DateRange, SavedInsightView } from '@/types';
 import { storage } from '@/services/storage';
 import { generateId } from '@/utils/numberUtils';
 
@@ -16,6 +16,7 @@ interface AppState {
   selectedDate: string | null;
   isConfigured: boolean;
   postFilter: PostContentFilter | null;
+  savedInsightViews: SavedInsightView[];
   
   setConfig: (config: AppConfig) => void;
   updateBrand: (brand: Partial<BrandConfig>) => void;
@@ -31,6 +32,10 @@ interface AppState {
   setCustomDateRange: (range: DateRange | null) => void;
   setSelectedDate: (date: string | null) => void;
   setPostFilter: (filter: PostContentFilter | null) => void;
+  
+  addInsightView: (view: Omit<SavedInsightView, 'id' | 'createdAt'>) => void;
+  removeInsightView: (id: string) => void;
+  loadInsightViews: () => void;
 }
 
 const DEFAULT_DATA_SOURCES: DataSourceConfig = {
@@ -47,6 +52,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedDate: null,
   isConfigured: false,
   postFilter: null,
+  savedInsightViews: [],
 
   setConfig: (config) => set({ config, isConfigured: true }),
 
@@ -195,4 +201,26 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCustomDateRange: (range) => set({ customDateRange: range }),
   setSelectedDate: (date) => set({ selectedDate: date }),
   setPostFilter: (filter) => set({ postFilter: filter }),
+  
+  addInsightView: (view) => {
+    const newView: SavedInsightView = {
+      ...view,
+      id: generateId(),
+      createdAt: Date.now(),
+    };
+    const updated = [...get().savedInsightViews, newView];
+    storage.setInsightViews(updated);
+    set({ savedInsightViews: updated });
+  },
+  
+  removeInsightView: (id) => {
+    const updated = get().savedInsightViews.filter(v => v.id !== id);
+    storage.setInsightViews(updated);
+    set({ savedInsightViews: updated });
+  },
+  
+  loadInsightViews: () => {
+    const views = storage.getInsightViews();
+    set({ savedInsightViews: views });
+  },
 }));

@@ -109,6 +109,24 @@ export const PLATFORMS: Platform[] = [
   { key: 'forum', name: '论坛', icon: 'Users', color: '#7C3AED' },
 ];
 
+export interface SpikeAttribution {
+  totalPosts: number;
+  organicCount: number;
+  adCount: number;
+  sentiment: {
+    positive: number;
+    negative: number;
+    neutral: number;
+  };
+  engagement: {
+    total: number;
+    avgLikes: number;
+    avgComments: number;
+    avgShares: number;
+  };
+  topDrivers: string[];
+}
+
 export interface AbnormalSpike {
   id: string;
   brandId: string;
@@ -122,10 +140,23 @@ export interface AbnormalSpike {
   growthRate: number;
   severity: 'high' | 'medium' | 'low';
   representativePosts: PostContent[];
+  attribution: SpikeAttribution;
 }
 
 export type SortField = 'engagement' | 'date' | 'likes' | 'comments' | 'shares';
 export type SortOrder = 'desc' | 'asc';
+
+export interface SavedInsightView {
+  id: string;
+  name: string;
+  createdAt: number;
+  platform: string;
+  brandName: string;
+  date: string;
+  sentimentFilter?: 'all' | 'positive' | 'negative' | 'neutral';
+  typeFilter?: 'all' | 'ad' | 'organic';
+  note?: string;
+}
 
 export const COMPETITOR_COLORS = [
   '#8B5CF6',

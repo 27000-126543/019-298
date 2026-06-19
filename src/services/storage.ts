@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'soundboard_config';
+const INSIGHT_VIEWS_KEY = 'soundboard_insight_views';
 
 export const storage = {
   getConfig: () => {
@@ -30,5 +31,23 @@ export const storage = {
 
   hasConfig: () => {
     return localStorage.getItem(STORAGE_KEY) !== null;
+  },
+
+  getInsightViews: () => {
+    try {
+      const data = localStorage.getItem(INSIGHT_VIEWS_KEY);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  setInsightViews: (views: unknown) => {
+    try {
+      localStorage.setItem(INSIGHT_VIEWS_KEY, JSON.stringify(views));
+      return true;
+    } catch {
+      return false;
+    }
   },
 };

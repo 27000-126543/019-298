@@ -6,11 +6,12 @@ import DetailsPage from '@/pages/DetailsPage';
 import { useAppStore } from '@/store/appStore';
 
 const App = () => {
-  const { isConfigured, loadConfig } = useAppStore();
+  const { isConfigured, loadConfig, loadInsightViews } = useAppStore();
   
   useEffect(() => {
     loadConfig();
-  }, [loadConfig]);
+    loadInsightViews();
+  }, [loadConfig, loadInsightViews]);
   
   const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     if (!isConfigured) {

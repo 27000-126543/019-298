@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, TrendingUp, AlertTriangle, BarChart3, ChevronDown, X, Filter, ArrowUpDown, RotateCcw } from 'lucide-react';
+import { Calendar, TrendingUp, AlertTriangle, BarChart3, ChevronDown, X, Filter, ArrowUpDown, RotateCcw, BookmarkPlus, Bookmark } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useVolumeData } from '@/hooks/useVolumeData';
 import { useShareData } from '@/hooks/useShareData';
@@ -11,18 +11,33 @@ import { SharePieChart } from '@/components/charts/SharePieChart';
 import { PlatformGrowthCard } from '@/components/cards/PlatformGrowthCard';
 import { PostCard } from '@/components/cards/PostCard';
 import { AbnormalSpikeCard } from '@/components/cards/AbnormalSpikeCard';
+import { SavedInsightCard } from '@/components/cards/SavedInsightCard';
 import { VolumeTrendChart } from '@/components/charts/VolumeTrendChart';
 import { Button } from '@/components/ui/Button';
 import { Tag } from '@/components/ui/Tag';
 import { Modal } from '@/components/ui/Modal';
-import { TimeRange, PLATFORMS, SortField, AbnormalSpike } from '@/types';
+import { TimeRange, PLATFORMS, SortField, AbnormalSpike, SavedInsightView } from '@/types';
 import { formatDateCN } from '@/utils/dateUtils';
 import { formatNumber, formatPercent } from '@/utils/numberUtils';
+import { generateMarketReviewCSV, downloadCSV } from '@/utils/exportUtils';
 import { cn } from '@/lib/utils';
 
 const DetailsPage = () => {
   const navigate = useNavigate();
-  const { config, timeRange, setTimeRange, customDateRange, setCustomDateRange, selectedDate, setSelectedDate, postFilter, setPostFilter } = useAppStore();
+  const { 
+    config, 
+    timeRange, 
+    setTimeRange, 
+    customDateRange, 
+    setCustomDateRange, 
+    selectedDate, 
+    setSelectedDate, 
+    postFilter, 
+    setPostFilter,
+    savedInsightViews,
+    addInsightView,
+    removeInsightView,
+  } = useAppStore();
   const { brandData, currentRange, enabledPlatforms } = useVolumeData();
   const { shareData, topGrowthPlatforms, decliningPlatforms, platformGrowth, enabledPlatformList } = useShareData();
   const { 
@@ -45,6 +60,12 @@ const DetailsPage = () => {
   } = usePostContent();
   const { competitorSpikes } = useAbnormalSpikes();
   
+  const [showPostModal, setShowPostModal] = useState(false);
+  const [tempStartDate, setTempStartDate] = useState<string>(customDateRange?.start || '');
+  const [tempEndDate, setTempEndDate] = useState<string>(customDateRange?.end || '');
+  const [showSaveViewModal, setShowSaveViewModal] = useState(false);
+  const [newViewName, setNewViewName] = useState('');
+  
   const isValidCustomRange = timeRange !== 'custom' || (
     customDateRange?.start && 
     customDateRange?.end && 
@@ -53,18 +74,35 @@ const DetailsPage = () => {
   
   const canDisplayDate = timeRange !== 'custom' || isValidCustomRange;
   
-  const [showPostModal, setShowPostModal] = useState(false);
-  
   const timeRangeOptions: { value: TimeRange; label: string }[] = [
     { value: 'yesterday', label: '昨天' },
     { value: '7days', label: '近 7 天' },
     { value: 'custom', label: '活动周期' },
   ];
   
+  const applyCustomDateRange = (start: string, end: string) => {
+    if (start && end && start <= end) {
+      setCustomDateRange({ start, end });
+    }
+  };
+  
+  const handleTempStartChange = (value: string) => {
+    setTempStartDate(value);
+    applyCustomDateRange(value, tempEndDate);
+  };
+  
+  const handleTempEndChange = (value: string) => {
+    setTempEndDate(value);
+    applyCustomDateRange(tempStartDate, value);
+  };
+  
   const handleTimeRangeChange = (range: TimeRange) => {
     setTimeRange(range);
     if (range !== 'custom') {
       setCustomDateRange(null);
+    } else {
+      setTempStartDate(customDateRange?.start || '');
+      setTempEndDate(customDateRange?.end || '');
     }
   };
   
@@ -82,6 +120,61 @@ const DetailsPage = () => {
     setPostFilter(null);
     setSelectedDate(date);
     setShowPostModal(true);
+  };
+  
+  const handleSaveView = () => {
+    const currentPlatform = platformFilter !== 'all' ? platformFilter : (postFilter?.platform || 'all');
+    const currentBrand = postFilter?.brandName || config?.brand.name || '';
+    const currentDate = selectedDate || '';
+    
+    if (!newViewName.trim() || !currentDate) return;
+    
+    addInsightView({
+      name: newViewName.trim(),
+      platform: currentPlatform,
+      brandName: currentBrand,
+      date: currentDate,
+      sentimentFilter: sentimentFilter,
+      typeFilter: typeFilter,
+    });
+    
+    setNewViewName('');
+    setShowSaveViewModal(false);
+  };
+  
+  const handleOpenInsightView = (view: SavedInsightView) => {
+    setPostFilter({
+      platform: view.platform,
+      brandName: view.brandName,
+      date: view.date,
+    });
+    setSelectedDate(view.date);
+    if (view.sentimentFilter) setSentimentFilter(view.sentimentFilter);
+    if (view.typeFilter) setTypeFilter(view.typeFilter);
+    setShowPostModal(true);
+  };
+  
+  const handleExportReport = () => {
+    if (!config) return;
+    
+    const timeRangeLabels: Record<TimeRange, string> = {
+      yesterday: '昨天',
+      '7days': '近7天',
+      custom: '活动周期',
+    };
+    
+    const csvContent = generateMarketReviewCSV({
+      timeRangeLabel: timeRangeLabels[timeRange],
+      dateRange: currentRange,
+      dataSources: config.dataSources,
+      enabledPlatformList,
+      brandRanking: shareData,
+      competitorSpikes,
+      brandName: config.brand.name,
+    });
+    
+    const filename = `市场复盘_${config.brand.name}_${currentRange.start}_${currentRange.end}.csv`;
+    downloadCSV(csvContent, filename);
   };
   
   if (!config) {
@@ -130,21 +223,15 @@ const DetailsPage = () => {
               <div className="flex items-center gap-2">
                 <input
                   type="date"
-                  value={customDateRange?.start || ''}
-                  onChange={(e) => setCustomDateRange({
-                    start: e.target.value,
-                    end: customDateRange?.end || e.target.value,
-                  })}
+                  value={tempStartDate}
+                  onChange={(e) => handleTempStartChange(e.target.value)}
                   className="px-3 py-2 text-sm border border-dark-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
                 <span className="text-dark-500">至</span>
                 <input
                   type="date"
-                  value={customDateRange?.end || ''}
-                  onChange={(e) => setCustomDateRange({
-                    start: customDateRange?.start || e.target.value,
-                    end: e.target.value,
-                  })}
+                  value={tempEndDate}
+                  onChange={(e) => handleTempEndChange(e.target.value)}
                   className="px-3 py-2 text-sm border border-dark-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
@@ -357,7 +444,19 @@ const DetailsPage = () => {
           </div>
           
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-dark-100 animate-fade-in" style={{ animationDelay: '500ms' }}>
-            <h3 className="text-lg font-semibold text-dark-900 mb-4">平台增长明细</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-dark-900">平台增长明细</h3>
+              {isValidCustomRange && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleExportReport}
+                >
+                  <BarChart3 className="w-4 h-4 mr-1" />
+                  导出复盘报告
+                </Button>
+              )}
+            </div>
             
             {!isValidCustomRange ? (
               <div className="text-center py-8 text-dark-500">
@@ -427,6 +526,36 @@ const DetailsPage = () => {
         </div>
       )}
       
+      {savedInsightViews.length > 0 && (
+        <div className="container mx-auto px-4 py-6">
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-dark-100 animate-fade-in" style={{ animationDelay: '580ms' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 bg-brand-50 rounded-lg flex items-center justify-center">
+                <Bookmark className="w-4 h-4 text-brand-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-dark-900">我的洞察视图</h3>
+                <p className="text-sm text-dark-500 mt-0.5">
+                  已保存 {savedInsightViews.length} 个热点内容筛选视图，点击可快速打开
+                </p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {savedInsightViews.slice(0, 6).map((view, index) => (
+                <SavedInsightCard
+                  key={view.id}
+                  view={view}
+                  onOpen={handleOpenInsightView}
+                  onRemove={removeInsightView}
+                  delay={index * 80}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      
       <Modal
         isOpen={showPostModal}
         onClose={() => setShowPostModal(false)}
@@ -456,18 +585,32 @@ const DetailsPage = () => {
                         日期：{postFilter.date}
                       </span>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setPostFilter(null);
-                        resetFilters();
-                      }}
-                      className="text-brand-700 hover:text-brand-900 hover:bg-brand-100"
-                    >
-                      <X className="w-4 h-4 mr-1" />
-                      清除筛选
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setNewViewName('');
+                          setShowSaveViewModal(true);
+                        }}
+                        className="text-brand-700 hover:text-brand-900 hover:bg-brand-100"
+                      >
+                        <BookmarkPlus className="w-4 h-4 mr-1" />
+                        保存视图
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setPostFilter(null);
+                          resetFilters();
+                        }}
+                        className="text-brand-700 hover:text-brand-900 hover:bg-brand-100"
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        清除筛选
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -656,6 +799,74 @@ const DetailsPage = () => {
               <p className="text-dark-500 text-sm">查看当天拉动声量的具体内容</p>
             </div>
           )}
+        </div>
+      </Modal>
+      
+      <Modal
+        isOpen={showSaveViewModal}
+        onClose={() => setShowSaveViewModal(false)}
+        title="保存洞察视图"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-dark-600">
+            将当前筛选条件保存为洞察视图，方便后续快速打开查看
+          </p>
+          
+          <div>
+            <label className="block text-sm font-medium text-dark-700 mb-1.5">
+              视图名称
+            </label>
+            <input
+              type="text"
+              value={newViewName}
+              onChange={(e) => setNewViewName(e.target.value)}
+              placeholder="例如：竞品A微博618当天讨论"
+              className="w-full px-3 py-2 text-sm border border-dark-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              autoFocus
+            />
+          </div>
+          
+          <div className="p-3 bg-dark-50 rounded-lg space-y-2">
+            <p className="text-xs text-dark-500">将保存的筛选条件：</p>
+            <div className="flex flex-wrap gap-1.5">
+              <span className="text-xs px-2 py-0.5 bg-white text-dark-700 rounded border border-dark-200">
+                日期：{selectedDate || '-'}
+              </span>
+              <span className="text-xs px-2 py-0.5 bg-white text-dark-700 rounded border border-dark-200">
+                平台：{platformFilter === 'all' ? '全部' : PLATFORMS.find(p => p.key === platformFilter)?.name || platformFilter}
+              </span>
+              <span className="text-xs px-2 py-0.5 bg-white text-dark-700 rounded border border-dark-200">
+                关键词：{postFilter?.brandName || '-'}
+              </span>
+              {sentimentFilter !== 'all' && (
+                <span className="text-xs px-2 py-0.5 bg-white text-dark-700 rounded border border-dark-200">
+                  情绪：{sentimentFilter === 'positive' ? '正面' : sentimentFilter === 'negative' ? '负面' : '中性'}
+                </span>
+              )}
+              {typeFilter !== 'all' && (
+                <span className="text-xs px-2 py-0.5 bg-white text-dark-700 rounded border border-dark-200">
+                  类型：{typeFilter === 'ad' ? '推广' : '自然'}
+                </span>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="ghost"
+              onClick={() => setShowSaveViewModal(false)}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleSaveView}
+              disabled={!newViewName.trim()}
+            >
+              <Bookmark className="w-4 h-4 mr-1" />
+              确认保存
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>

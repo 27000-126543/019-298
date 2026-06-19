@@ -36,12 +36,55 @@ const detectSpikesForBrand = (
         if (growthRate >= 1.5) severity = 'high';
         else if (growthRate >= 0.8) severity = 'medium';
         
-        const representativePosts: PostContent[] = generatePostContent(
+        const allPostsForDay = generatePostContent(
           brandName,
           competitorNames,
           current.date,
-          5
-        ).filter(p => p.platform === platform && p.date === current.date).slice(0, 2);
+          20
+        ).filter(p => p.platform === platform && p.date === current.date);
+        
+        const representativePosts = allPostsForDay.slice(0, 2);
+        
+        const organicCount = allPostsForDay.filter(p => !p.isAd).length;
+        const adCount = allPostsForDay.filter(p => p.isAd).length;
+        const sentiment = {
+          positive: allPostsForDay.filter(p => p.sentiment === 'positive').length,
+          negative: allPostsForDay.filter(p => p.sentiment === 'negative').length,
+          neutral: allPostsForDay.filter(p => p.sentiment === 'neutral').length,
+        };
+        const totalEngagement = allPostsForDay.reduce((sum, p) => 
+          sum + p.engagement.likes + p.engagement.comments + p.engagement.shares, 0);
+        const avgLikes = allPostsForDay.length > 0 
+          ? Math.round(allPostsForDay.reduce((sum, p) => sum + p.engagement.likes, 0) / allPostsForDay.length)
+          : 0;
+        const avgComments = allPostsForDay.length > 0
+          ? Math.round(allPostsForDay.reduce((sum, p) => sum + p.engagement.comments, 0) / allPostsForDay.length)
+          : 0;
+        const avgShares = allPostsForDay.length > 0
+          ? Math.round(allPostsForDay.reduce((sum, p) => sum + p.engagement.shares, 0) / allPostsForDay.length)
+          : 0;
+        
+        const drivers: string[] = [];
+        if (adCount > allPostsForDay.length * 0.4) drivers.push('推广投放');
+        if (sentiment.positive > allPostsForDay.length * 0.6) drivers.push('正面讨论');
+        if (sentiment.negative > allPostsForDay.length * 0.3) drivers.push('负面争议');
+        if (avgLikes > 1000 || avgShares > 100) drivers.push('高互动传播');
+        if (organicCount > allPostsForDay.length * 0.7) drivers.push('自然讨论热度');
+        if (drivers.length === 0) drivers.push('综合因素');
+        
+        const attribution = {
+          totalPosts: allPostsForDay.length,
+          organicCount,
+          adCount,
+          sentiment,
+          engagement: {
+            total: totalEngagement,
+            avgLikes,
+            avgComments,
+            avgShares,
+          },
+          topDrivers: drivers,
+        };
         
         spikes.push({
           id: generateId(),
@@ -56,6 +99,7 @@ const detectSpikesForBrand = (
           growthRate,
           severity,
           representativePosts,
+          attribution,
         });
       }
     }
