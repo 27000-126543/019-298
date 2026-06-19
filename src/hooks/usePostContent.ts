@@ -4,7 +4,7 @@ import { generatePostContent } from '@/services/mockData/postGenerator';
 import { PostContent, SortField, SortOrder, PLATFORMS } from '@/types';
 
 export const usePostContent = () => {
-  const { config, selectedDate } = useAppStore();
+  const { config, selectedDate, postFilter } = useAppStore();
   
   const enabledPlatforms = useMemo(() => {
     if (!config) return PLATFORMS.map(p => p.key);
@@ -20,11 +20,22 @@ export const usePostContent = () => {
     return posts.filter(p => enabledPlatforms.includes(p.platform));
   }, [config, selectedDate, enabledPlatforms]);
   
-  const [platformFilter, setPlatformFilter] = useState<string>('all');
+  const [platformFilterState, setPlatformFilterState] = useState<string>('all');
   const [sentimentFilter, setSentimentFilter] = useState<'all' | 'positive' | 'negative' | 'neutral'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'ad' | 'organic'>('all');
   const [sortField, setSortField] = useState<SortField>('engagement');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  
+  const platformFilter = useMemo(() => {
+    if (postFilter && postFilter.platform) {
+      return postFilter.platform;
+    }
+    return platformFilterState;
+  }, [postFilter, platformFilterState]);
+  
+  const setPlatformFilter = useCallback((value: string) => {
+    setPlatformFilterState(value);
+  }, []);
   
   const getTotalEngagement = (post: PostContent) => {
     return post.engagement.likes + post.engagement.comments + post.engagement.shares;
@@ -35,6 +46,15 @@ export const usePostContent = () => {
     
     if (platformFilter !== 'all') {
       result = result.filter(p => p.platform === platformFilter);
+    }
+    
+    if (postFilter && postFilter.brandName) {
+      const keyword = postFilter.brandName.toLowerCase();
+      result = result.filter(p => 
+        p.title.toLowerCase().includes(keyword) || 
+        p.content.toLowerCase().includes(keyword) ||
+        p.author.toLowerCase().includes(keyword)
+      );
     }
     
     if (sentimentFilter !== 'all') {
@@ -79,7 +99,7 @@ export const usePostContent = () => {
     });
     
     return result;
-  }, [allPosts, platformFilter, sentimentFilter, typeFilter, sortField, sortOrder]);
+  }, [allPosts, platformFilter, sentimentFilter, typeFilter, sortField, sortOrder, postFilter]);
   
   const postsBySentiment = useMemo(() => {
     const positive = allPosts.filter(p => p.sentiment === 'positive');
@@ -109,7 +129,7 @@ export const usePostContent = () => {
   }, []);
   
   const resetFilters = useCallback(() => {
-    setPlatformFilter('all');
+    setPlatformFilterState('all');
     setSentimentFilter('all');
     setTypeFilter('all');
     setSortField('engagement');
@@ -138,5 +158,6 @@ export const usePostContent = () => {
     setSortOrder,
     toggleSortOrder,
     resetFilters,
+    postFilter,
   };
 };

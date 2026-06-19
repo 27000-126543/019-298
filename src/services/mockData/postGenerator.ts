@@ -85,6 +85,7 @@ export const generatePostContent = (
     
     posts.push({
       id: generateId(),
+      date,
       title: replacePlaceholders(template.title, brandName, competitor),
       content: replacePlaceholders(template.content, brandName, competitor),
       author: author.name,

@@ -15,14 +15,14 @@ import { VolumeTrendChart } from '@/components/charts/VolumeTrendChart';
 import { Button } from '@/components/ui/Button';
 import { Tag } from '@/components/ui/Tag';
 import { Modal } from '@/components/ui/Modal';
-import { TimeRange, PLATFORMS, SortField } from '@/types';
+import { TimeRange, PLATFORMS, SortField, AbnormalSpike } from '@/types';
 import { formatDateCN } from '@/utils/dateUtils';
 import { formatNumber, formatPercent } from '@/utils/numberUtils';
 import { cn } from '@/lib/utils';
 
 const DetailsPage = () => {
   const navigate = useNavigate();
-  const { config, timeRange, setTimeRange, customDateRange, setCustomDateRange, selectedDate, setSelectedDate } = useAppStore();
+  const { config, timeRange, setTimeRange, customDateRange, setCustomDateRange, selectedDate, setSelectedDate, postFilter, setPostFilter } = useAppStore();
   const { brandData, currentRange, enabledPlatforms } = useVolumeData();
   const { shareData, topGrowthPlatforms, decliningPlatforms, platformGrowth, enabledPlatformList } = useShareData();
   const { 
@@ -68,7 +68,18 @@ const DetailsPage = () => {
     }
   };
   
+  const handleViewMore = (spike: AbnormalSpike) => {
+    setPostFilter({
+      platform: spike.platform,
+      brandName: spike.brandName,
+      date: spike.date,
+    });
+    setSelectedDate(spike.date);
+    setShowPostModal(true);
+  };
+  
   const handleChartPointClick = (date: string) => {
+    setPostFilter(null);
     setSelectedDate(date);
     setShowPostModal(true);
   };
@@ -388,7 +399,7 @@ const DetailsPage = () => {
         </div>
       </main>
       
-      {competitorSpikes.length > 0 && (
+      {isValidCustomRange && competitorSpikes.length > 0 && (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-dark-100 animate-fade-in" style={{ animationDelay: '550ms' }}>
           <div className="flex items-center gap-2 mb-4">
             <div className="w-8 h-8 bg-danger-50 rounded-lg flex items-center justify-center">
@@ -408,6 +419,7 @@ const DetailsPage = () => {
                 key={spike.id}
                 spike={spike}
                 getSentimentLabel={getSentimentLabel}
+                onViewMore={handleViewMore}
                 delay={index * 100}
               />
             ))}
@@ -428,6 +440,38 @@ const DetailsPage = () => {
         <div className="space-y-4">
           {selectedDate ? (
             <>
+              {postFilter && (
+                <div className="p-4 bg-brand-50 rounded-xl border border-brand-100">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Filter className="w-4 h-4 text-brand-600" />
+                      <span className="text-sm font-medium text-brand-900">当前筛选：</span>
+                      <span className="text-xs px-2 py-1 bg-brand-100 text-brand-700 rounded-full">
+                        平台：{PLATFORMS.find(p => p.key === postFilter.platform)?.name || postFilter.platform}
+                      </span>
+                      <span className="text-xs px-2 py-1 bg-brand-100 text-brand-700 rounded-full">
+                        关键词：{postFilter.brandName}
+                      </span>
+                      <span className="text-xs px-2 py-1 bg-brand-100 text-brand-700 rounded-full">
+                        日期：{postFilter.date}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPostFilter(null);
+                        resetFilters();
+                      }}
+                      className="text-brand-700 hover:text-brand-900 hover:bg-brand-100"
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      清除筛选
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
               <div className="p-4 bg-dark-50 rounded-xl space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-2">

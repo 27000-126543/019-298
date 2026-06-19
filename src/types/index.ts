@@ -71,6 +71,7 @@ export interface PlatformGrowth {
 
 export interface PostContent {
   id: string;
+  date: string;
   title: string;
   content: string;
   author: string;

@@ -8,7 +8,8 @@ import { generateId } from '@/utils/numberUtils';
 const detectSpikesForBrand = (
   brandData: BrandVolumeData,
   platformKeys: string[],
-  competitorNames: string[]
+  competitorNames: string[],
+  dateRange: { start: string; end: string }
 ): AbnormalSpike[] => {
   const spikes: AbnormalSpike[] = [];
   const { data, brandId, brandName, color } = brandData;
@@ -20,6 +21,8 @@ const detectSpikesForBrand = (
     for (let i = 1; i < data.length; i++) {
       const current = data[i];
       const previous = data[i - 1];
+      
+      if (current.date < dateRange.start || current.date > dateRange.end) continue;
       
       const currentVolume = current[platform as keyof typeof current] as number;
       const previousVolume = previous[platform as keyof typeof previous] as number;
@@ -37,8 +40,8 @@ const detectSpikesForBrand = (
           brandName,
           competitorNames,
           current.date,
-          3
-        ).filter(p => p.platform === platform).slice(0, 2);
+          5
+        ).filter(p => p.platform === platform && p.date === current.date).slice(0, 2);
         
         spikes.push({
           id: generateId(),
@@ -62,8 +65,21 @@ const detectSpikesForBrand = (
 };
 
 export const useAbnormalSpikes = () => {
-  const { config } = useAppStore();
-  const { allData, enabledPlatforms } = useVolumeData();
+  const { config, timeRange, customDateRange } = useAppStore();
+  const { allData, enabledPlatforms, currentRange } = useVolumeData();
+  
+  const isValidCustomRange = timeRange !== 'custom' || (
+    customDateRange?.start && 
+    customDateRange?.end && 
+    customDateRange.start <= customDateRange.end
+  );
+  
+  const effectiveRange = useMemo(() => {
+    if (timeRange === 'custom' && isValidCustomRange) {
+      return currentRange;
+    }
+    return currentRange;
+  }, [timeRange, isValidCustomRange, currentRange]);
   
   const spikes = useMemo((): AbnormalSpike[] => {
     if (!config || allData.length === 0) return [];
@@ -75,13 +91,14 @@ export const useAbnormalSpikes = () => {
       const brandSpikes = detectSpikesForBrand(
         brandData,
         enabledPlatforms,
-        competitorNames
+        competitorNames,
+        effectiveRange
       );
       allSpikes.push(...brandSpikes);
     });
     
     return allSpikes.sort((a, b) => b.growthRate - a.growthRate);
-  }, [config, allData, enabledPlatforms]);
+  }, [config, allData, enabledPlatforms, effectiveRange, timeRange, customDateRange]);
   
   const spikesByBrand = useMemo(() => {
     const grouped: Record<string, AbnormalSpike[]> = {};
@@ -108,5 +125,7 @@ export const useAbnormalSpikes = () => {
     spikesByBrand,
     highSeveritySpikes,
     competitorSpikes,
+    effectiveRange,
+    isValidCustomRange,
   };
 };

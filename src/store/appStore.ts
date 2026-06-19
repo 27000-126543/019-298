@@ -3,12 +3,19 @@ import { AppConfig, BrandConfig, CompetitorConfig, DataSourceConfig, TimeRange, 
 import { storage } from '@/services/storage';
 import { generateId } from '@/utils/numberUtils';
 
+interface PostContentFilter {
+  platform: string;
+  brandName: string;
+  date: string;
+}
+
 interface AppState {
   config: AppConfig | null;
   timeRange: TimeRange;
   customDateRange: DateRange | null;
   selectedDate: string | null;
   isConfigured: boolean;
+  postFilter: PostContentFilter | null;
   
   setConfig: (config: AppConfig) => void;
   updateBrand: (brand: Partial<BrandConfig>) => void;
@@ -23,6 +30,7 @@ interface AppState {
   setTimeRange: (range: TimeRange) => void;
   setCustomDateRange: (range: DateRange | null) => void;
   setSelectedDate: (date: string | null) => void;
+  setPostFilter: (filter: PostContentFilter | null) => void;
 }
 
 const DEFAULT_DATA_SOURCES: DataSourceConfig = {
@@ -38,6 +46,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   customDateRange: null,
   selectedDate: null,
   isConfigured: false,
+  postFilter: null,
 
   setConfig: (config) => set({ config, isConfigured: true }),
 
@@ -185,4 +194,5 @@ export const useAppStore = create<AppState>((set, get) => ({
   setTimeRange: (range) => set({ timeRange: range }),
   setCustomDateRange: (range) => set({ customDateRange: range }),
   setSelectedDate: (date) => set({ selectedDate: date }),
+  setPostFilter: (filter) => set({ postFilter: filter }),
 }));

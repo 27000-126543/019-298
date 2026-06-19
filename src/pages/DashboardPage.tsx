@@ -15,16 +15,16 @@ import { PostCard } from '@/components/cards/PostCard';
 import { AbnormalSpikeCard } from '@/components/cards/AbnormalSpikeCard';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { TimeRange, PLATFORMS, SortField, SortOrder } from '@/types';
+import { TimeRange, PLATFORMS, SortField, SortOrder, AbnormalSpike } from '@/types';
 import { formatDateCN } from '@/utils/dateUtils';
 import { formatNumber, formatPercent } from '@/utils/numberUtils';
 import { cn } from '@/lib/utils';
 
 const DashboardPage = () => {
   const navigate = useNavigate();
-  const { config, timeRange, setTimeRange, selectedDate, setSelectedDate } = useAppStore();
-  const { brandData, currentData, previousData, getBrandTotalVolume, getBrandGrowthRate, getPlatformVolume, enabledPlatforms } = useVolumeData();
-  const { shareData, brandRanking, currentRange, enabledPlatformList } = useShareData();
+  const { config, timeRange, setTimeRange, customDateRange, setCustomDateRange, selectedDate, setSelectedDate, postFilter, setPostFilter } = useAppStore();
+  const { brandData, currentData, previousData, getBrandTotalVolume, getBrandGrowthRate, getPlatformVolume, enabledPlatforms, currentRange } = useVolumeData();
+  const { shareData, brandRanking, enabledPlatformList } = useShareData();
   const { 
     filteredPosts, 
     postsBySentiment, 
@@ -46,6 +46,14 @@ const DashboardPage = () => {
   const { competitorSpikes } = useAbnormalSpikes();
   
   const [showPostModal, setShowPostModal] = useState(false);
+  
+  const isValidCustomRange = timeRange !== 'custom' || (
+    customDateRange?.start && 
+    customDateRange?.end && 
+    customDateRange.start <= customDateRange.end
+  );
+  
+  const canDisplayDate = timeRange !== 'custom' || isValidCustomRange;
   
   const timeRangeOptions: { value: TimeRange; label: string }[] = [
     { value: 'yesterday', label: '昨天' },
@@ -104,7 +112,25 @@ const DashboardPage = () => {
     ];
   }, [brandData, currentData, previousData, getBrandTotalVolume, getBrandGrowthRate, brandRanking, config]);
   
+  const handleTimeRangeChange = (range: TimeRange) => {
+    setTimeRange(range);
+    if (range !== 'custom') {
+      setCustomDateRange(null);
+    }
+  };
+  
+  const handleViewMore = (spike: AbnormalSpike) => {
+    setPostFilter({
+      platform: spike.platform,
+      brandName: spike.brandName,
+      date: spike.date,
+    });
+    setSelectedDate(spike.date);
+    setShowPostModal(true);
+  };
+  
   const handleChartPointClick = (date: string) => {
+    setPostFilter(null);
     setSelectedDate(date);
     setShowPostModal(true);
   };
@@ -123,16 +149,22 @@ const DashboardPage = () => {
             <h1 className="text-2xl font-bold text-dark-900">声量走势看板</h1>
             <p className="text-dark-500 mt-1 flex items-center gap-2">
               <Calendar className="w-4 h-4" />
-              {formatDateCN(new Date(currentRange.start))} - {formatDateCN(new Date(currentRange.end))}
+              {canDisplayDate ? (
+                <>
+                  {formatDateCN(new Date(currentRange.start))} - {formatDateCN(new Date(currentRange.end))}
+                </>
+              ) : (
+                <span className="text-warning-600">请选择活动周期的开始和结束日期</span>
+              )}
             </p>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="flex bg-white rounded-lg border border-dark-200 p-1">
               {timeRangeOptions.map((option) => (
                 <button
                   key={option.value}
-                  onClick={() => setTimeRange(option.value)}
+                  onClick={() => handleTimeRangeChange(option.value)}
                   className={cn(
                     'px-4 py-2 text-sm font-medium rounded-md transition-all duration-200',
                     timeRange === option.value
@@ -144,6 +176,30 @@ const DashboardPage = () => {
                 </button>
               ))}
             </div>
+            
+            {timeRange === 'custom' && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={customDateRange?.start || ''}
+                  onChange={(e) => setCustomDateRange({
+                    start: e.target.value,
+                    end: customDateRange?.end || e.target.value,
+                  })}
+                  className="px-3 py-2 text-sm border border-dark-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                <span className="text-dark-500">至</span>
+                <input
+                  type="date"
+                  value={customDateRange?.end || ''}
+                  onChange={(e) => setCustomDateRange({
+                    start: customDateRange?.start || e.target.value,
+                    end: e.target.value,
+                  })}
+                  className="px-3 py-2 text-sm border border-dark-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+            )}
             
             <Button variant="secondary" onClick={() => navigate('/details')}>
               详情分析
@@ -179,7 +235,7 @@ const DashboardPage = () => {
               </div>
             </div>
             
-            {brandData && (
+            {brandData && isValidCustomRange ? (
               <VolumeTrendChart
                 data={brandData}
                 showArea={true}
@@ -187,6 +243,13 @@ const DashboardPage = () => {
                 onPointClick={handleChartPointClick}
                 enabledPlatforms={enabledPlatforms}
               />
+            ) : (
+              <div className="flex items-center justify-center h-[350px] text-dark-500">
+                {timeRange === 'custom' && !isValidCustomRange 
+                  ? '请选择有效的活动周期日期范围'
+                  : '暂无数据'
+                }
+              </div>
             )}
           </div>
           
@@ -195,7 +258,7 @@ const DashboardPage = () => {
               平台声量分布
             </h3>
             
-            {brandData && (
+            {brandData && isValidCustomRange ? (
               <SharePieChart
                 data={enabledPlatformList.map(p => ({
                   brandId: p.key,
@@ -209,6 +272,13 @@ const DashboardPage = () => {
                 height={300}
                 showCenterLabel={true}
               />
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-dark-500">
+                {timeRange === 'custom' && !isValidCustomRange 
+                  ? '请选择有效的活动周期日期范围'
+                  : '暂无数据'
+                }
+              </div>
             )}
           </div>
         </div>
@@ -218,25 +288,37 @@ const DashboardPage = () => {
             <h3 className="text-lg font-semibold text-dark-900 mb-4">
               品牌声量份额
             </h3>
-            <SharePieChart
-              data={shareData}
-              height={300}
-              showCenterLabel={true}
-            />
+            {isValidCustomRange ? (
+              <SharePieChart
+                data={shareData}
+                height={300}
+                showCenterLabel={true}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-dark-500">
+                请选择有效的活动周期日期范围
+              </div>
+            )}
           </div>
           
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-dark-100 animate-fade-in" style={{ animationDelay: '300ms' }}>
             <h3 className="text-lg font-semibold text-dark-900 mb-4">
               各平台品牌对比
             </h3>
-            <PlatformBarChart
-              data={shareData}
-              height={300}
-            />
+            {isValidCustomRange ? (
+              <PlatformBarChart
+                data={shareData}
+                height={300}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-dark-500">
+                请选择有效的活动周期日期范围
+              </div>
+            )}
           </div>
         </div>
         
-        {competitorSpikes.length > 0 && (
+        {isValidCustomRange && competitorSpikes.length > 0 && (
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-dark-100 animate-fade-in" style={{ animationDelay: '400ms' }}>
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 bg-danger-50 rounded-lg flex items-center justify-center">
@@ -245,7 +327,7 @@ const DashboardPage = () => {
               <div>
                 <h3 className="text-lg font-semibold text-dark-900">竞品异常波动提醒</h3>
                 <p className="text-sm text-dark-500 mt-0.5">
-                  检测到 {competitorSpikes.length} 个竞品异常增长事件，点击查看日期和代表内容
+                  检测到 {competitorSpikes.length} 个竞品异常增长事件，点击卡片查看日期和代表内容
                 </p>
               </div>
             </div>
@@ -256,6 +338,7 @@ const DashboardPage = () => {
                   key={spike.id}
                   spike={spike}
                   getSentimentLabel={getSentimentLabel}
+                  onViewMore={handleViewMore}
                   delay={index * 100}
                 />
               ))}
@@ -268,105 +351,111 @@ const DashboardPage = () => {
             品牌竞品对比
           </h3>
           
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-dark-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">品牌</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-dark-500">排名</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-dark-500">总声量</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-dark-500">份额</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-dark-500">环比</th>
-                  {enabledPlatformList.map(p => (
-                    <th key={p.key} className="text-right py-3 px-4 text-sm font-medium text-dark-500">
-                      {p.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {brandRanking.map((brand, index) => {
-                  const isMyBrand = brand.brandId === config.brand.id;
-                  const maxVolume = brandRanking[0]?.totalVolume || 1;
-                  
-                  return (
-                    <tr
-                      key={brand.brandId}
-                      className={cn(
-                        'border-b border-dark-100 transition-colors',
-                        isMyBrand ? 'bg-brand-50/50' : 'hover:bg-dark-50',
-                        index % 2 === 0 && !isMyBrand && 'bg-dark-50/30'
-                      )}
-                    >
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: brand.color }}
-                          />
-                          <span className={cn(
-                            'font-medium',
-                            isMyBrand ? 'text-brand-700' : 'text-dark-900'
-                          )}>
-                            {brand.brandName}
-                            {isMyBrand && <span className="ml-2 text-xs text-brand-500">(我的品牌)</span>}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="text-right py-4 px-4">
-                        <span className={cn(
-                          'inline-flex items-center justify-center w-6 h-6 rounded-full text-sm font-bold',
-                          brand.rank === 1 ? 'bg-warning-500 text-white' :
-                          brand.rank === 2 ? 'bg-dark-400 text-white' :
-                          brand.rank === 3 ? 'bg-warning-700 text-white' :
-                          'bg-dark-200 text-dark-700'
-                        )}>
-                          {brand.rank}
-                        </span>
-                      </td>
-                      <td className="text-right py-4 px-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-24 h-2 bg-dark-100 rounded-full overflow-hidden">
+          {isValidCustomRange ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-dark-200">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">品牌</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-dark-500">排名</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-dark-500">总声量</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-dark-500">份额</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-dark-500">环比</th>
+                    {enabledPlatformList.map(p => (
+                      <th key={p.key} className="text-right py-3 px-4 text-sm font-medium text-dark-500">
+                        {p.name}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {brandRanking.map((brand, index) => {
+                    const isMyBrand = brand.brandId === config.brand.id;
+                    const maxVolume = brandRanking[0]?.totalVolume || 1;
+                    
+                    return (
+                      <tr
+                        key={brand.brandId}
+                        className={cn(
+                          'border-b border-dark-100 transition-colors',
+                          isMyBrand ? 'bg-brand-50/50' : 'hover:bg-dark-50',
+                          index % 2 === 0 && !isMyBrand && 'bg-dark-50/30'
+                        )}
+                      >
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-3">
                             <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${(brand.totalVolume / maxVolume) * 100}%`,
-                                backgroundColor: brand.color,
-                              }}
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: brand.color }}
                             />
+                            <span className={cn(
+                              'font-medium',
+                              isMyBrand ? 'text-brand-700' : 'text-dark-900'
+                            )}>
+                              {brand.brandName}
+                              {isMyBrand && <span className="ml-2 text-xs text-brand-500">(我的品牌)</span>}
+                            </span>
                           </div>
-                          <span className="font-mono text-sm font-medium text-dark-900 min-w-[80px] text-right">
-                            {formatNumber(brand.totalVolume)}
+                        </td>
+                        <td className="text-right py-4 px-4">
+                          <span className={cn(
+                            'inline-flex items-center justify-center w-6 h-6 rounded-full text-sm font-bold',
+                            brand.rank === 1 ? 'bg-warning-500 text-white' :
+                            brand.rank === 2 ? 'bg-dark-400 text-white' :
+                            brand.rank === 3 ? 'bg-warning-700 text-white' :
+                            'bg-dark-200 text-dark-700'
+                          )}>
+                            {brand.rank}
                           </span>
-                        </div>
-                      </td>
-                      <td className="text-right py-4 px-4 font-mono text-sm text-dark-900">
-                        {formatPercent(brand.share)}
-                      </td>
-                      <td className="text-right py-4 px-4">
-                        <span className={cn(
-                          'text-sm font-medium',
-                          brand.growth > 0.05 ? 'text-success-600' :
-                          brand.growth < -0.05 ? 'text-danger-600' :
-                          'text-dark-500'
-                        )}>
-                          {brand.growth > 0.05 ? '+' : ''}{formatPercent(brand.growth)}
-                        </span>
-                      </td>
-                      {enabledPlatformList.map(p => {
-                        const breakdown = brand.platformBreakdown.find(b => b.platform === p.key);
-                        return (
-                          <td key={p.key} className="text-right py-4 px-4 font-mono text-sm text-dark-700">
-                            {breakdown ? formatNumber(breakdown.volume) : '-'}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                        <td className="text-right py-4 px-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="w-24 h-2 bg-dark-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${(brand.totalVolume / maxVolume) * 100}%`,
+                                  backgroundColor: brand.color,
+                                }}
+                              />
+                            </div>
+                            <span className="font-mono text-sm font-medium text-dark-900 min-w-[80px] text-right">
+                              {formatNumber(brand.totalVolume)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="text-right py-4 px-4 font-mono text-sm text-dark-900">
+                          {formatPercent(brand.share)}
+                        </td>
+                        <td className="text-right py-4 px-4">
+                          <span className={cn(
+                            'text-sm font-medium',
+                            brand.growth > 0.05 ? 'text-success-600' :
+                            brand.growth < -0.05 ? 'text-danger-600' :
+                            'text-dark-500'
+                          )}>
+                            {brand.growth > 0.05 ? '+' : ''}{formatPercent(brand.growth)}
+                          </span>
+                        </td>
+                        {enabledPlatformList.map(p => {
+                          const breakdown = brand.platformBreakdown.find(b => b.platform === p.key);
+                          return (
+                            <td key={p.key} className="text-right py-4 px-4 font-mono text-sm text-dark-700">
+                              {breakdown ? formatNumber(breakdown.volume) : '-'}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-12 text-dark-500">
+              请选择有效的活动周期日期范围
+            </div>
+          )}
         </div>
       </main>
       
@@ -383,6 +472,38 @@ const DashboardPage = () => {
         <div className="space-y-4">
           {selectedDate ? (
             <>
+              {postFilter && (
+                <div className="p-4 bg-brand-50 rounded-xl border border-brand-100">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Filter className="w-4 h-4 text-brand-600" />
+                      <span className="text-sm font-medium text-brand-900">当前筛选：</span>
+                      <span className="text-xs px-2 py-1 bg-brand-100 text-brand-700 rounded-full">
+                        平台：{PLATFORMS.find(p => p.key === postFilter.platform)?.name || postFilter.platform}
+                      </span>
+                      <span className="text-xs px-2 py-1 bg-brand-100 text-brand-700 rounded-full">
+                        关键词：{postFilter.brandName}
+                      </span>
+                      <span className="text-xs px-2 py-1 bg-brand-100 text-brand-700 rounded-full">
+                        日期：{postFilter.date}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPostFilter(null);
+                        resetFilters();
+                      }}
+                      className="text-brand-700 hover:text-brand-900 hover:bg-brand-100"
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      清除筛选
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
               <div className="p-4 bg-dark-50 rounded-xl space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-2">
